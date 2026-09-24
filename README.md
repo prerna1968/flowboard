@@ -18,6 +18,33 @@ The brief allowed Pinia, Zustand, Redux, or a composable. I chose **Zustand**. P
 **Vite + Tailwind**  
 The brief prefers this stack. I used Vite, React 18, TypeScript, and Tailwind CSS 3, then stripped the rest: `src/index.css` is only the three `@tailwind` directives, tokens live in `tailwind.config.ts`, and Headless UI is used unstyled for dialogs and menus. No CSS modules, SCSS, or a styled component library.
 
+## Tech stack
+
+I kept the list short. Each library has one job.
+
+- **React 18** — The UI layer. Hooks and a small component tree fit a single-page workspace. The brief’s Vite boilerplate is React, so I stayed there instead of switching to Vue.
+- **TypeScript** — The brief asked for a typed client store and typed fixtures. Shared types (`Task`, `Container`, `StoreResult`) sit in `src/types.ts` so the UI and the store cannot drift.
+- **Vite** — Preferred in the brief. Fast refresh while building, and the same toolchain runs tests (`vitest`) and the production build.
+- **Zustand** — The client data layer. I used the vanilla `createStore` factory plus `useStore` so the app can have one singleton and tests can make a fresh store with persistence off. See [Choices](#choices).
+- **Tailwind CSS 3** — Preferred in the brief, and the only source of visual style. Tokens (color, type, radius, shadow) live in `src/tailwind.config.ts`. That keeps list rows, kanban cards, and the drawer on one look.
+- **Headless UI** — Dialogs, menus, and listboxes need keyboard and focus behavior. Headless UI ships that unstyled, so it does not fight the “Tailwind only” rule.
+- **dnd-kit** — Board and list reorder, plus the sidebar tree. It gives sensors, collision, and a drag overlay without writing pointer math.
+- **Vitest + Testing Library** — The brief asked for unit tests and one component test. Vitest stays on the Vite stack. Testing Library drives the Alice → Bob switch the way a reviewer would.
+
+I did not add React Router, React Query, Redux, or a CSS-in-JS library. There is no URL API and no network, so a router and a fetch cache would only add surface area.
+
+## Architectural decisions
+
+The store is the API. The UI never writes `localStorage` or edits seed data itself.
+
+1. **One store, result-shaped mutations.** `createFlowboardStore()` holds containers, statuses, tasks, and the current user. Every write returns `{ data }` or `{ error: { code, message } }` (`FORBIDDEN`, `NOT_FOUND`, `VALIDATION`). That is the contract a real backend would have, so a later `fetch` swap can keep the same UI.
+2. **Permissions are a pure module, not a CSS hide.** `src/store/permissions.ts` is called by selectors (what the sidebar shows) and by mutations (whether a write is allowed). Hiding a row is not the check. Bob cannot update a Sprint task even if he guessed the id.
+3. **Selectors sit between the store and the views.** `src/store/selectors.ts` owns tree children, visible tasks, search, and sort. List and board both group through `boardColumns()`, so Group-by stays one implementation.
+4. **Factory for tests, singleton for the app.** The running app uses `flowboard` with persist and a short boot delay (so skeletons are visible). Tests call `createFlowboardStore({ persist: false, delayMs: 0 })` and never share state.
+5. **Seed is the source of truth for people.** Persistence saves the workspace (containers, tasks, selected list, view). Users and grants always come from `src/fixtures/seed.ts`, so Reset demo data and a fresh clone still show the same Alice / Bob / Carol story.
+6. **Optimistic move, then rollback.** A kanban or list drop writes immediately. If the store rejects it (wrong list, forbidden), the previous task array is restored. The unit test records both snapshots so the rollback is real.
+7. **Chrome is one product.** Sidebar, top bar, list or board, and a task drawer. Shared pickers and tokens mean a priority flag looks the same on a card and on a row. Views do not own their own color system.
+
 ## Run locally
 
 ```bash
@@ -68,7 +95,7 @@ flowchart LR
 | `src/store/selectors.ts` | Tree children, task filters, search, and sort |
 | `src/components` | Sidebar, top bar, kanban, list, task drawer, toasts |
 
-The store is created with `createFlowboardStore()`. The app uses the `flowboard` singleton. Tests create isolated stores with persistence and the boot delay turned off.
+The store is created with `createFlowboardStore()`. The app uses the `flowboard` singleton. Tests create isolated stores with persistence and the boot delay turned off. Why the pieces are split this way is in [Architectural decisions](#architectural-decisions).
 
 ## Data model
 
@@ -182,4 +209,4 @@ Cursor helped scaffold the app, the store, and the first tests. Corrections and 
 
 ## Stack
 
-React 18, TypeScript, Vite, Zustand, Tailwind CSS 3, Headless UI (dialog and menu), dnd-kit, Vitest, and Testing Library.
+React 18, TypeScript, Vite, Zustand, Tailwind CSS 3, Headless UI (dialog and menu), dnd-kit, Vitest, and Testing Library. Why each one is here is in [Tech stack](#tech-stack).
