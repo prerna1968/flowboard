@@ -2,6 +2,22 @@
 
 A single-workspace project board: spaces, folders, and lists, with a kanban board, a list view, and a small permission model. There is no backend. Data lives in a Zustand store seeded from fixtures and saved to `localStorage`.
 
+## Choices
+
+The brief left these open. Here is what I picked, and why.
+
+**No backend — client store + persistence**  
+There is no API. All data lives in a typed Zustand store, seeded from `src/fixtures/seed.ts`. I turned **localStorage persistence on** (key `flowboard-v1`) so a refresh keeps the workspace. Users and grants always reload from the seed, so the Alice / Bob / Carol permission demo cannot be overwritten. Tests create a store with persistence off.
+
+**Archive, not only soft-delete**  
+I used **archive** (`archivedAt`) so a space, folder, list, or task can be hidden and later restored. **Delete** is a separate, confirmed action that removes the item for good (and its children or subtasks). Both actions are in the sidebar menu and the task drawer.
+
+**Zustand for mutations**  
+The brief allowed Pinia, Zustand, Redux, or a composable. I chose **Zustand**. Pinia is for Vue. Redux would have been more setup than this app needs. Every write goes through the store and returns `{ data }` or `{ error }`, the same shape a real client API would.
+
+**Vite + Tailwind**  
+The brief prefers this stack. I used Vite, React 18, TypeScript, and Tailwind CSS 3, then stripped the rest: `src/index.css` is only the three `@tailwind` directives, tokens live in `tailwind.config.ts`, and Headless UI is used unstyled for dialogs and menus. No CSS modules, SCSS, or a styled component library.
+
 ## Run locally
 
 ```bash
