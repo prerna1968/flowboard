@@ -1,15 +1,8 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle, Switch } from "@headlessui/react";
+import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import { useState, type FormEvent } from "react";
 import { useFlowboard } from "../store/store";
-import type { Permission } from "../types";
 import { isError } from "../types";
 import { fieldClass, focusRing, ghostButton, primaryButton } from "./classes";
-import { SelectMenu } from "./SelectMenu";
-
-const permissionOptions = [
-  { value: "edit" as Permission, label: "Full edit" },
-  { value: "view" as Permission, label: "View only" },
-];
 
 export function CreateSpaceDialog({ onClose }: { onClose: () => void }) {
   const containers = useFlowboard((state) => state.containers);
@@ -17,8 +10,6 @@ export function CreateSpaceDialog({ onClose }: { onClose: () => void }) {
   const workspace = containers.find((container) => container.type === "workspace");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [permission, setPermission] = useState<Permission>("edit");
-  const [isPrivate, setIsPrivate] = useState(false);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -28,8 +19,6 @@ export function CreateSpaceDialog({ onClose }: { onClose: () => void }) {
       type: "space",
       parentId: workspace.id,
       description,
-      defaultPermission: permission,
-      visibility: isPrivate ? "private" : "public",
     });
     if (!isError(result)) onClose();
   }
@@ -91,42 +80,6 @@ export function CreateSpaceDialog({ onClose }: { onClose: () => void }) {
                   className={fieldClass}
                 />
               </div>
-
-              <div className="flex items-center justify-between gap-3 border-t border-line pt-5">
-                <span className="flex items-center gap-2 text-sm font-medium text-ink">
-                  <PeopleIcon />
-                  Default permission
-                  <span
-                    title="Full edit lets members create and change tasks in this Space. View only makes it read-only for them. Admins always keep full edit."
-                    className="cursor-help text-ink-faint"
-                  >
-                    <InfoIcon />
-                  </span>
-                </span>
-                <SelectMenu
-                  ariaLabel="Default permission"
-                  size="compact"
-                  className="w-32 shrink-0"
-                  value={permission}
-                  options={permissionOptions}
-                  onChange={setPermission}
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <span>
-                  <span className="block text-sm font-medium text-ink">Make Private</span>
-                  <span className="block text-sm text-ink-muted">Only you and invited members have access</span>
-                </span>
-                <Switch
-                  checked={isPrivate}
-                  onChange={setIsPrivate}
-                  aria-label="Make private"
-                  className={`group relative flex h-6 w-11 shrink-0 items-center rounded-full bg-line data-[checked]:bg-accent ${focusRing}`}
-                >
-                  <span className="h-5 w-5 translate-x-0.5 rounded-full bg-surface-raised shadow transition group-data-[checked]:translate-x-[22px]" />
-                </Switch>
-              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
@@ -148,29 +101,6 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
       <path d="M6 6l8 8M14 6l-8 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PeopleIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 text-ink-muted">
-      <path
-        d="M8 9.2a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2zm-4.5 6.3c0-2.2 2-3.6 4.5-3.6s4.5 1.4 4.5 3.6M13.4 5.2a2.2 2.2 0 0 1 0 4.2m1.3 2.7c1.4.5 2.3 1.5 2.3 3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function InfoIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-3.5 w-3.5">
-      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M10 9.2v3.4M10 7.1v.1" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }

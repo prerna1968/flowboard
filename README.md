@@ -153,6 +153,10 @@ The chrome is one product: sidebar, top bar with the account / user switcher, an
 
 `@dnd-kit` needs `transform` and `transition` on the dragged node. The sidebar width and the edge tooltip's vertical position are the other inline `style` values. Those are the only inline `style` values.
 
+## AI usage
+
+Cursor helped scaffold the app, the store, and the first tests. Corrections and rejected ideas are in [AI_USAGE.md](./AI_USAGE.md).
+
 ## Stack
 
 React 18, TypeScript, Vite, Zustand, Tailwind CSS 3, Headless UI (dialog and menu), dnd-kit, Vitest, and Testing Library.

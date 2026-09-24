@@ -102,6 +102,24 @@ export const statusPillClass: Record<string, string> = {
   done: "bg-status-doneSoft text-status-done",
 };
 
+export const statusChipClass: Record<string, string> = {
+  todo: "bg-surface-raised text-ink-muted",
+  in_progress: "bg-priority-normal text-white",
+  done: "bg-status-done text-white",
+};
+
+export const statusWellClass: Record<string, string> = {
+  todo: "bg-status-todoSoft",
+  in_progress: "bg-status-progressSoft",
+  done: "bg-status-doneSoft",
+};
+
+export const statusAddClass: Record<string, string> = {
+  todo: "text-ink-faint hover:text-ink-muted",
+  in_progress: "text-priority-normal hover:text-priority-normal",
+  done: "text-ink-faint hover:text-status-done",
+};
+
 export const priorityBadgeClass: Record<Priority, string> = {
   urgent: "bg-priority-urgentSoft text-priority-urgent",
   high: "bg-priority-highSoft text-priority-high",

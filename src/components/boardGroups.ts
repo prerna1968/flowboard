@@ -1,16 +1,14 @@
 import { addUtcDays, localTodayUtc, parseDue, sameUtcDay, toDueIso } from "../lib/format";
 import type { Priority, Status, Task, User } from "../types";
 
-export type BoardGroupBy = "status" | "assignee" | "priority" | "tags" | "due" | "type";
+export type BoardGroupBy = "status" | "assignee" | "priority" | "due";
 export type BoardDirection = "asc" | "desc";
 
 export const boardGroupOptions: { id: BoardGroupBy; label: string }[] = [
   { id: "status", label: "Status" },
   { id: "assignee", label: "Assignee" },
   { id: "priority", label: "Priority" },
-  { id: "tags", label: "Tags" },
   { id: "due", label: "Due date" },
-  { id: "type", label: "Task Type" },
 ];
 
 export interface BoardColumnModel {
@@ -81,16 +79,7 @@ function columnsFor(groupBy: BoardGroupBy, tasks: Task[], statuses: Status[], us
       tasks: tasks.filter((task) => task.priority === priority),
     }));
   }
-  if (groupBy === "due") {
-    return dueColumns(tasks);
-  }
-  return [
-    {
-      id: "none",
-      label: groupBy === "tags" ? "No tags" : "No type",
-      tasks,
-    },
-  ];
+  return dueColumns(tasks);
 }
 
 function dueColumns(tasks: Task[]): BoardColumnModel[] {

@@ -69,8 +69,12 @@ export interface FlowboardState {
   listLoading: boolean;
   toasts: Toast[];
   loadToken: number;
+  composeTaskListId: string | null;
+  composeTaskAt: number;
   setCurrentUser: (userId: string) => StoreResult<User>;
   selectList: (listId: string) => StoreResult<string>;
+  requestComposeTask: (listId: string) => StoreResult<string>;
+  clearComposeTask: () => void;
   setView: (view: ViewMode) => void;
   setSearch: (search: string) => void;
   toggleSort: (key: SortKey) => void;
@@ -265,6 +269,8 @@ export function createFlowboardStore(options: StoreOptions = {}): StoreApi<Flowb
       listLoading: false,
       toasts: [],
       loadToken: 0,
+      composeTaskListId: null,
+      composeTaskAt: 0,
 
       setCurrentUser: (userId) => {
         const next = get().users.find((item) => item.id === userId);
@@ -311,6 +317,29 @@ export function createFlowboardStore(options: StoreOptions = {}): StoreApi<Flowb
         }
         return ok(listId);
       },
+
+      requestComposeTask: (listId) => {
+        const access = listAccess(get(), listId);
+        if (isError(access)) return reject(access);
+        const same = get().selectedListId === listId && !get().listLoading;
+        const token = get().loadToken + 1;
+        set({
+          selectedListId: listId,
+          selectedTaskId: null,
+          search: "",
+          listLoading: !same && delayMs > 0,
+          loadToken: same ? get().loadToken : token,
+          composeTaskListId: listId,
+          composeTaskAt: get().composeTaskAt + 1,
+        });
+        if (!same && delayMs > 0) {
+          window.setTimeout(() => {
+            if (get().loadToken === token) set({ listLoading: false });
+          }, delayMs);
+        }
+        return ok(listId);
+      },
+      clearComposeTask: () => set({ composeTaskListId: null }),
 
       setView: (view) => set({ view }),
       setSearch: (search) => set({ search }),
@@ -742,6 +771,8 @@ export function createFlowboardStore(options: StoreOptions = {}): StoreApi<Flowb
           listLoading: false,
           toasts: [],
           loadToken: get().loadToken + 1,
+          composeTaskListId: null,
+          composeTaskAt: 0,
         });
         toast("Demo data reset.");
       },

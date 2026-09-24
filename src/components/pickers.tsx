@@ -1,8 +1,9 @@
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   addUtcDays,
   duePresetHint,
+  formatDue,
   formatDueCompact,
   localTodayUtc,
   parseDue,
@@ -14,13 +15,23 @@ import type { Priority, User } from "../types";
 import { focusRing } from "./classes";
 import { Avatar, AvatarStack, PriorityFlag } from "./TaskMeta";
 
+const chipClass = `inline-flex h-7 items-center justify-center gap-1 rounded-full bg-surface-sunken px-1.5 text-xs ${focusRing}`;
+
 export function DueDatePicker({
   value,
   overdue = false,
+  portal = true,
+  placement = "down",
+  chip = false,
+  children,
   onChange,
 }: {
   value: string | null;
   overdue?: boolean;
+  portal?: boolean;
+  placement?: "up" | "down";
+  chip?: boolean;
+  children?: ReactNode;
   onChange: (iso: string | null) => void;
 }) {
   const today = localTodayUtc();
@@ -29,71 +40,96 @@ export function DueDatePicker({
   const presets = duePresets(today);
   const label = formatDueCompact(value);
 
+  function setDue(iso: string | null) {
+    onChange(iso);
+    const next = parseDue(iso);
+    if (next) setCursor(next);
+  }
+
   return (
-    <Popover className="relative">
-      <PopoverButton
-        aria-label={label ? `Due date, ${label}` : "Due date"}
-        className={`rounded-control px-1 py-0.5 text-xs hover:bg-surface-sunken ${focusRing} ${
-          overdue ? "font-medium text-danger" : label ? "text-ink" : "text-ink-faint"
-        }`}
-      >
-        {label || <CalendarIcon />}
-      </PopoverButton>
+    <Popover className={children ? "relative w-full" : "relative"}>
+      {children ? (
+        <PopoverButton
+          type="button"
+          aria-label={label ? `Due date, ${label}` : "Due date"}
+          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-sunken data-[open]:bg-surface-sunken ${focusRing}`}
+        >
+          {children}
+        </PopoverButton>
+      ) : chip ? (
+        <PopoverButton
+          type="button"
+          aria-label={label ? `Due date, ${label}` : "Due date"}
+          title={value ? formatDue(value) : undefined}
+          className={`${chipClass} ${overdue ? "text-danger" : value ? "text-status-done" : "text-ink-faint"}`}
+        >
+          <CalendarIcon />
+          {value ? <span className="pr-0.5 font-medium">{formatDue(value)}</span> : null}
+        </PopoverButton>
+      ) : (
+        <div className="inline-flex items-center rounded-full border border-line bg-surface-raised">
+          <PopoverButton
+            type="button"
+            aria-label={label ? `Due date, ${label}` : "Due date"}
+            title={value ? formatDue(value) : undefined}
+            className={`rounded-full px-1.5 py-0.5 text-xs hover:bg-surface-sunken ${focusRing} ${
+              overdue ? "font-medium text-danger" : label ? "text-ink" : "text-ink-faint"
+            }`}
+          >
+            {label || <CalendarIcon />}
+          </PopoverButton>
+          <span className={value ? "" : "invisible pointer-events-none"}>
+            <ClearDueButton onClear={() => setDue(null)} />
+          </span>
+        </div>
+      )}
       <PopoverPanel
-        anchor="bottom end"
-        className="z-50 flex w-[400px] max-w-[calc(100vw-16px)] flex-col rounded-card bg-surface-raised p-3 shadow-pop ring-1 ring-line [--anchor-gap:8px]"
+        {...(portal ? { anchor: "bottom end" as const } : {})}
+        className={`${
+          portal
+            ? ""
+            : children
+              ? "absolute right-full top-0 mr-1"
+              : placement === "up"
+                ? "absolute right-0 bottom-full mb-1"
+                : "absolute right-0 top-full mt-1"
+        } z-50 flex w-[400px] max-w-[calc(100vw-16px)] flex-col rounded-card bg-surface-raised p-3 shadow-pop ring-1 ring-line [--anchor-gap:8px]`}
       >
-        {({ close }) => (
-          <>
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex min-w-0 flex-1 items-center gap-2 rounded-control border border-line px-2 py-1.5 text-sm">
-                <CalendarIcon />
-                <span className={label ? "text-ink" : "text-ink-faint"}>{label || "No date"}</span>
-              </span>
-              {value ? (
-                <button
-                  type="button"
-                  aria-label="Clear due date"
-                  className={`rounded-control px-2 py-1 text-sm text-ink-muted hover:bg-surface-sunken ${focusRing}`}
-                  onClick={() => {
-                    onChange(null);
-                    close();
-                  }}
-                >
-                  ×
-                </button>
-              ) : null}
-            </div>
-            <div className="flex gap-3">
-              <div className="flex w-40 shrink-0 flex-col">
-                {presets.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className="flex items-center justify-between rounded-control px-2 py-1.5 text-left text-sm hover:bg-surface-sunken"
-                    onClick={() => {
-                      onChange(preset.date ? toDueIso(preset.date) : null);
-                      close();
-                    }}
-                  >
-                    <span>{preset.label}</span>
-                    <span className="text-xs text-ink-faint">{preset.hint}</span>
-                  </button>
-                ))}
-              </div>
-              <MonthCalendar
-                cursor={cursor}
-                selected={selected}
-                today={today}
-                onCursor={setCursor}
-                onPick={(date) => {
-                  onChange(toDueIso(date));
-                  close();
+        <div className="mb-3">
+          <div className="flex items-center rounded-full border border-line bg-surface-raised px-3 py-2">
+            <span className={`min-w-0 flex-1 text-sm ${label ? "text-ink" : "text-ink-faint"}`}>
+              {label || "No date"}
+            </span>
+            <span className={value ? "" : "invisible pointer-events-none"}>
+              <ClearDueButton onClear={() => setDue(null)} />
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <div className="flex w-40 shrink-0 flex-col">
+            {presets.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="flex items-center justify-between rounded-control px-2 py-1.5 text-left text-sm hover:bg-surface-sunken"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  setDue(preset.date ? toDueIso(preset.date) : null);
                 }}
-              />
-            </div>
-          </>
-        )}
+              >
+                <span>{preset.label}</span>
+                <span className="text-xs text-ink-faint">{preset.hint}</span>
+              </button>
+            ))}
+          </div>
+          <MonthCalendar
+            cursor={cursor}
+            selected={selected}
+            today={today}
+            onCursor={setCursor}
+            onPick={(date) => setDue(toDueIso(date))}
+          />
+        </div>
       </PopoverPanel>
     </Popover>
   );
@@ -103,11 +139,17 @@ export function AssigneePicker({
   users,
   assigneeIds,
   currentUserId,
+  portal = true,
+  chip = false,
+  children,
   onChange,
 }: {
   users: User[];
   assigneeIds: string[];
   currentUserId: string;
+  portal?: boolean;
+  chip?: boolean;
+  children?: ReactNode;
   onChange: (ids: string[]) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -117,16 +159,25 @@ export function AssigneePicker({
   const ordered = [...matches].sort((a, b) => Number(b.id === currentUserId) - Number(a.id === currentUserId));
 
   return (
-    <Popover className="relative">
+    <Popover className={children ? "relative w-full" : "relative"}>
       <PopoverButton
+        type="button"
         aria-label={selected.length ? `Assignees, ${selected.map((user) => user.name).join(", ")}` : "Assignee"}
-        className={`rounded-control p-0.5 hover:bg-surface-sunken ${focusRing}`}
+        className={
+          children
+            ? `flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-sunken data-[open]:bg-surface-sunken ${focusRing}`
+            : chip
+              ? `${chipClass} min-w-7 p-0 ${selected.length ? "" : "text-ink-faint"}`
+              : `rounded-control p-0.5 hover:bg-surface-sunken ${focusRing}`
+        }
       >
-        {selected.length > 0 ? <AvatarStack users={selected} /> : <EmptyAssignee />}
+        {children ?? (selected.length > 0 ? <AvatarStack users={selected} /> : <EmptyAssignee />)}
       </PopoverButton>
       <PopoverPanel
-        anchor="bottom end"
-        className="z-50 w-72 rounded-card bg-surface-raised p-2 shadow-pop ring-1 ring-line [--anchor-gap:8px]"
+        {...(portal ? { anchor: "bottom end" as const } : {})}
+        className={`${
+          portal ? "" : children ? "absolute right-full top-0 mr-1" : "absolute right-0 top-full mt-1"
+        } z-50 w-72 rounded-card bg-surface-raised p-2 shadow-pop ring-1 ring-line [--anchor-gap:8px]`}
       >
         <input
           autoFocus
@@ -221,7 +272,10 @@ function MonthCalendar({
               className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-sm ${
                 isSelected ? "bg-accent text-on" : isToday ? "ring-1 ring-accent text-accent" : inMonth ? "text-ink hover:bg-surface-sunken" : "text-ink-faint hover:bg-surface-sunken"
               }`}
-              onClick={() => onPick(day)}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                onPick(day);
+              }}
             >
               {day.getUTCDate()}
             </button>
@@ -252,19 +306,44 @@ function duePresets(today: Date): { label: string; date: Date | null; hint: stri
 
 const priorityChoices: Priority[] = ["urgent", "high", "normal", "low"];
 
-export function PriorityPicker({ value, onChange }: { value: Priority; onChange: (priority: Priority) => void }) {
+export function PriorityPicker({
+  value,
+  portal = true,
+  chip = false,
+  children,
+  onChange,
+}: {
+  value: Priority;
+  portal?: boolean;
+  chip?: boolean;
+  children?: ReactNode;
+  onChange: (priority: Priority) => void;
+}) {
   return (
-    <Popover className="relative">
+    <Popover className={children ? "relative w-full" : "relative"}>
       <PopoverButton
+        type="button"
         aria-label={`Priority, ${priorityLabel[value]}`}
-        className={`inline-flex items-center gap-1 rounded-md border border-transparent px-1 py-0.5 text-xs text-ink hover:border-line ${focusRing}`}
+        className={
+          children
+            ? `flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-sunken data-[open]:bg-surface-sunken ${focusRing}`
+            : chip
+              ? `${chipClass} min-w-7 ${value === "none" ? "text-ink-faint" : ""}`
+              : `inline-flex items-center gap-1 rounded-md border border-transparent px-1 py-0.5 text-xs text-ink hover:border-line ${focusRing}`
+        }
       >
-        <PriorityFlag priority={value} decorative />
-        {value === "none" ? null : <span>{priorityLabel[value]}</span>}
+        {children ?? (
+          <>
+            <PriorityFlag priority={value} decorative />
+            {chip || value === "none" ? null : <span>{priorityLabel[value]}</span>}
+          </>
+        )}
       </PopoverButton>
       <PopoverPanel
-        anchor="bottom end"
-        className="z-50 w-52 rounded-card bg-surface-raised py-1 shadow-pop ring-1 ring-line [--anchor-gap:8px]"
+        {...(portal ? { anchor: "bottom end" as const } : {})}
+        className={`${
+          portal ? "" : children ? "absolute left-0 top-full mt-1" : "absolute right-0 top-full mt-1"
+        } z-50 w-52 rounded-card bg-surface-raised py-1 shadow-pop ring-1 ring-line [--anchor-gap:8px]`}
       >
         {({ close }) => (
           <>
@@ -306,9 +385,41 @@ export function PriorityPicker({ value, onChange }: { value: Priority; onChange:
   );
 }
 
+function ClearDueButton({ onClear }: { onClear: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Clear due date"
+      className={`mr-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink ${focusRing}`}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClear();
+      }}
+    >
+      <ClearCircleIcon />
+    </button>
+  );
+}
+
+function ClearCircleIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.25" />
+      <path
+        d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function CalendarIcon() {
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 text-ink-faint">
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
       <rect x="3" y="4.5" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
       <path d="M3 8h14M7 3.5v3M13 3.5v3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>

@@ -18,17 +18,18 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
-import { useRef, useState } from "react";
-import type { Status, Task, User } from "../types";
-import { formatDue, isOverdue, statusTextClass } from "../lib/format";
-import { filterBySearch, tasksInStatus, topLevelTasks } from "../store/selectors";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { Priority, Status, Task, User } from "../types";
+import { isError } from "../types";
+import { formatDue, isOverdue, priorityLabel, statusAddClass, statusWellClass } from "../lib/format";
+import { filterBySearch, subtasksOf, tasksInStatus, topLevelTasks } from "../store/selectors";
 import { useFlowboard } from "../store/store";
-import { boardColumns, boardGroupOptions, type BoardColumnModel, type BoardDirection, type BoardGroupBy } from "./boardGroups";
+import { boardColumns, type BoardColumnModel, type BoardDirection, type BoardGroupBy } from "./boardGroups";
 import { focusRing } from "./classes";
-import { SelectMenu, type SelectOption } from "./SelectMenu";
+import { GroupByMenu } from "./GroupByMenu";
+import { AssigneePicker, DueDatePicker, PriorityPicker } from "./pickers";
 import { TaskComposer } from "./TaskComposer";
-import { Avatar, AvatarStack, PriorityFlag, StatusMark } from "./TaskMeta";
+import { Avatar, AvatarStack, PriorityFlag, StatusChip, StatusMark } from "./TaskMeta";
 
 export function KanbanBoard({ listId }: { listId: string }) {
   const tasks = useFlowboard((state) => state.tasks);
@@ -38,6 +39,9 @@ export function KanbanBoard({ listId }: { listId: string }) {
   const openTask = useFlowboard((state) => state.openTask);
   const moveTask = useFlowboard((state) => state.moveTask);
   const updateTask = useFlowboard((state) => state.updateTask);
+  const composeTaskListId = useFlowboard((state) => state.composeTaskListId);
+  const composeTaskAt = useFlowboard((state) => state.composeTaskAt);
+  const clearComposeTask = useFlowboard((state) => state.clearComposeTask);
   const [groupBy, setGroupBy] = useState<BoardGroupBy>("status");
   const [subgroup, setSubgroup] = useState<BoardGroupBy | null>(null);
   const [direction, setDirection] = useState<BoardDirection>("asc");
@@ -49,6 +53,9 @@ export function KanbanBoard({ listId }: { listId: string }) {
   const listStatuses = statuses.filter((status) => status.listId === listId).sort((a, b) => a.position - b.position);
   const visible = filterBySearch(topLevelTasks(tasks, listId), tasks, search);
   const columns = boardColumns(groupBy, direction, visible, listStatuses, users).filter((column) => !searching || column.tasks.length > 0);
+  const todoId = listStatuses.find((status) => status.category === "todo")?.id;
+  const composeColumnId =
+    composeTaskListId === listId ? (groupBy === "status" && todoId ? todoId : columns[0]?.id) : undefined;
   const activeTask = tasks.find((task) => task.id === activeId) ?? null;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -186,7 +193,7 @@ export function KanbanBoard({ listId }: { listId: string }) {
           setSubgroupDirection("asc");
         }}
       />
-      <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-4 sm:gap-4">
+      <div className="mt-4 flex items-start gap-4 overflow-x-auto pb-4">
         {columns.map((column) => (
           <Column
             key={column.id}
@@ -198,6 +205,9 @@ export function KanbanBoard({ listId }: { listId: string }) {
             statuses={listStatuses}
             highlighted={overColumnId === column.id}
             searching={searching}
+            autoCompose={composeColumnId === column.id}
+            composeAt={composeTaskAt}
+            onComposeOpened={clearComposeTask}
             onOpen={requestOpen}
           />
         ))}
@@ -218,6 +228,9 @@ function Column({
   statuses,
   highlighted,
   searching,
+  autoCompose,
+  composeAt,
+  onComposeOpened,
   onOpen,
 }: {
   listId: string;
@@ -228,27 +241,34 @@ function Column({
   statuses: Status[];
   highlighted: boolean;
   searching: boolean;
+  autoCompose: boolean;
+  composeAt: number;
+  onComposeOpened: () => void;
   onOpen: (taskId: string) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: `column:${column.id}` });
   const assignee = column.assigneeIds?.length === 1 ? users.find((user) => user.id === column.assigneeIds?.[0]) : undefined;
   const sections = subgroup ? boardColumns(subgroup, direction, column.tasks, statuses, users).filter((section) => section.tasks.length > 0) : [];
+  const well = column.statusColor ? (statusWellClass[column.statusColor] ?? statusWellClass.todo) : statusWellClass.todo;
   return (
     <section className="flex w-72 shrink-0 flex-col">
-      <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-wide">
-        {column.statusColor ? <StatusMark color={column.statusColor} /> : null}
-        {column.priority ? <PriorityFlag priority={column.priority} decorative /> : null}
-        {assignee ? <Avatar user={assignee} /> : null}
-        <span className={column.statusColor ? (statusTextClass[column.statusColor] ?? "text-ink") : "text-ink"}>{column.label}</span>
-        <span className="font-medium text-ink-faint">{column.tasks.length}</span>
-      </h2>
       <SortableContext items={column.tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
         <div
           ref={setNodeRef}
-          className={`flex min-h-48 flex-1 flex-col gap-2 rounded-card p-2 ${
-            highlighted ? "bg-accent-soft ring-2 ring-accent" : "bg-surface"
-          }`}
+          className={`flex min-h-48 flex-1 flex-col gap-2.5 rounded-2xl p-3 ${well} ${highlighted ? "ring-2 ring-accent" : ""}`}
         >
+          <h2 className="flex items-center gap-2 px-0.5">
+            {column.statusColor ? (
+              <StatusChip color={column.statusColor} label={column.label} />
+            ) : (
+              <>
+                {column.priority ? <PriorityFlag priority={column.priority} decorative /> : null}
+                {assignee ? <Avatar user={assignee} /> : null}
+                <span className="text-xs font-bold uppercase tracking-wide text-ink">{column.label}</span>
+              </>
+            )}
+            <span className="text-xs font-medium text-ink-faint">{column.tasks.length}</span>
+          </h2>
           {column.tasks.length === 0 ? (
             <p className="rounded-control px-3 py-6 text-center text-xs text-ink-faint">No tasks</p>
           ) : subgroup ? (
@@ -260,7 +280,14 @@ function Column({
               <SortableCard key={task.id} task={task} users={users} statuses={statuses} disabled={searching} onOpen={onOpen} />
             ))
           )}
-          <ColumnAddTask listId={listId} statuses={statuses} column={column} />
+          <ColumnAddTask
+            listId={listId}
+            statuses={statuses}
+            column={column}
+            autoOpen={autoCompose}
+            composeAt={composeAt}
+            onOpened={onComposeOpened}
+          />
         </div>
       </SortableContext>
     </section>
@@ -300,12 +327,33 @@ function SubgroupSection({
   );
 }
 
-function ColumnAddTask({ listId, statuses, column }: { listId: string; statuses: Status[]; column: BoardColumnModel }) {
+function ColumnAddTask({
+  listId,
+  statuses,
+  column,
+  autoOpen,
+  composeAt,
+  onOpened,
+}: {
+  listId: string;
+  statuses: Status[];
+  column: BoardColumnModel;
+  autoOpen: boolean;
+  composeAt: number;
+  onOpened: () => void;
+}) {
   const [editing, setEditing] = useState(false);
+  const todoId = statuses.find((status) => status.category === "todo")?.id;
+  useEffect(() => {
+    if (!autoOpen || composeAt === 0) return;
+    setEditing(true);
+    onOpened();
+  }, [autoOpen, composeAt, onOpened]);
 
   if (!editing) {
+    const addClass = column.statusColor ? (statusAddClass[column.statusColor] ?? statusAddClass.todo) : statusAddClass.todo;
     return (
-      <button type="button" className={`rounded-control px-2 py-2 text-left text-sm text-ink-faint hover:bg-surface-raised hover:text-accent ${focusRing}`} onClick={() => setEditing(true)}>
+      <button type="button" className={`rounded-control px-1 py-1.5 text-left text-sm ${addClass} ${focusRing}`} onClick={() => setEditing(true)}>
         + Add Task
       </button>
     );
@@ -315,7 +363,7 @@ function ColumnAddTask({ listId, statuses, column }: { listId: string; statuses:
     <TaskComposer
       listId={listId}
       statuses={statuses}
-      defaultStatusId={column.statusId}
+      defaultStatusId={column.statusId ?? todoId}
       defaultPriority={column.priority}
       defaultDueDate={column.dueDate}
       defaultAssigneeIds={column.assigneeIds}
@@ -325,154 +373,176 @@ function ColumnAddTask({ listId, statuses, column }: { listId: string; statuses:
   );
 }
 
-const directionOptions: SelectOption<BoardDirection>[] = [
-  { value: "asc", label: "Ascending" },
-  { value: "desc", label: "Descending" },
-];
-
-function groupOptions(options: { id: BoardGroupBy; label: string }[]): SelectOption<BoardGroupBy>[] {
-  return options.map((option) => ({
-    value: option.id,
-    label: option.label,
-    icon: <GroupIcon name={option.id} />,
-  }));
+function stopCardInteract(event: { stopPropagation: () => void }) {
+  event.stopPropagation();
 }
 
-function GroupByMenu({
-  groupBy,
-  subgroup,
-  direction,
-  subgroupDirection,
-  onGroupBy,
-  onSubgroup,
-  onDirection,
-  onSubgroupDirection,
-  onReset,
+const cardActionClass = `flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink ${focusRing}`;
+
+function CardToolbar({
+  pinned,
+  onAddSubtask,
+  onRename,
 }: {
-  groupBy: BoardGroupBy;
-  subgroup: BoardGroupBy | null;
-  direction: BoardDirection;
-  subgroupDirection: BoardDirection;
-  onGroupBy: (value: BoardGroupBy) => void;
-  onSubgroup: (value: BoardGroupBy | null) => void;
-  onDirection: (value: BoardDirection) => void;
-  onSubgroupDirection: (value: BoardDirection) => void;
-  onReset: () => void;
+  pinned: boolean;
+  onAddSubtask?: () => void;
+  onRename: () => void;
 }) {
-  const current = boardGroupOptions.find((option) => option.id === groupBy) ?? boardGroupOptions[0];
   return (
-    <Popover className="relative">
-      <PopoverButton className={`inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5 text-sm font-medium text-accent ${focusRing}`}>
-        <LayersIcon />
-        Group: {current.label}
-      </PopoverButton>
-      <PopoverPanel anchor="bottom start" className="z-30 w-[min(420px,calc(100vw-2rem))] !overflow-visible rounded-2xl bg-surface-raised p-4 shadow-pop ring-1 ring-line [--anchor-gap:8px]">
-        <p className="text-sm text-ink-muted">Group by</p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <SelectMenu
-            ariaLabel="Group by"
-            value={groupBy}
-            options={groupOptions(boardGroupOptions)}
-            portal={false}
-            menuWidth="button"
-            className="min-w-0 flex-1"
-            onChange={(value) => {
-              onGroupBy(value);
-              if (value === subgroup) onSubgroup(null);
-            }}
-          />
-          <SelectMenu
-            ariaLabel="Group direction"
-            value={direction}
-            options={directionOptions}
-            portal={false}
-            menuWidth="button"
-            className="w-36 shrink-0"
-            onChange={onDirection}
-          />
-          <button type="button" aria-label="Clear grouping" className={`rounded-lg p-2 text-ink-muted hover:bg-surface ${focusRing}`} onClick={onReset}>
-            <TrashIcon />
-          </button>
-        </div>
-        <div className="mt-2">
-          {subgroup ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <SelectMenu
-                ariaLabel="Subgroup"
-                value={subgroup}
-                options={groupOptions(boardGroupOptions.filter((option) => option.id !== groupBy))}
-                portal={false}
-                menuWidth="button"
-                className="min-w-0 flex-1"
-                onChange={onSubgroup}
-              />
-              <SelectMenu
-                ariaLabel="Subgroup direction"
-                value={subgroupDirection}
-                options={directionOptions}
-                portal={false}
-                menuWidth="button"
-                className="w-36 shrink-0"
-                onChange={onSubgroupDirection}
-              />
-              <button
-                type="button"
-                aria-label="Remove subgroup"
-                className={`rounded-lg p-2 text-ink-muted hover:bg-surface ${focusRing}`}
-                onClick={() => {
-                  onSubgroup(null);
-                  onSubgroupDirection("asc");
-                }}
-              >
-                <TrashIcon />
-              </button>
-            </div>
-          ) : (
-            <SelectMenu
-              ariaLabel="Add subgroup"
-              value={null}
-              placeholder="Add subgroup"
-              options={groupOptions(boardGroupOptions.filter((option) => option.id !== groupBy))}
-              portal={false}
-              menuWidth="button"
-              onChange={onSubgroup}
-            />
-          )}
-        </div>
-      </PopoverPanel>
-    </Popover>
+    <div
+      className={`absolute right-2 top-2 z-10 items-center gap-0.5 rounded-full bg-surface-raised p-0.5 shadow-[0_1px_2px_rgb(var(--shadow)/0.08)] ring-1 ring-line ${
+        pinned ? "flex" : "hidden group-hover/card:flex group-focus-within/card:flex"
+      }`}
+      onPointerDown={stopCardInteract}
+      onClick={stopCardInteract}
+    >
+      {onAddSubtask ? (
+        <button type="button" aria-label="Add subtask" className={cardActionClass} onClick={onAddSubtask}>
+          <PlusIcon />
+        </button>
+      ) : null}
+      <button type="button" aria-label="Rename task" className={cardActionClass} onClick={onRename}>
+        <PencilIcon />
+      </button>
+    </div>
   );
 }
 
-function LayersIcon() {
+function CardTitle({
+  title,
+  renaming,
+  onOpen,
+  onRename,
+  onCancelRename,
+}: {
+  title: string;
+  renaming: boolean;
+  onOpen: () => void;
+  onRename: (title: string) => void;
+  onCancelRename: () => void;
+}) {
+  if (!renaming) {
+    return (
+      <button type="button" className={`block w-full pr-16 text-left text-sm font-medium leading-5 text-ink hover:text-accent ${focusRing}`} onClick={onOpen}>
+        {title}
+      </button>
+    );
+  }
+  return <RenameField title={title} onRename={onRename} onCancel={onCancelRename} />;
+}
+
+function RenameField({ title, onRename, onCancel }: { title: string; onRename: (title: string) => void; onCancel: () => void }) {
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.focus({ preventScroll: true });
+    const end = node.value.length;
+    node.setSelectionRange(end, end);
+  }, []);
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path d="M10 3.2 3.2 6.6 10 10l6.8-3.4L10 3.2zM3.2 9.6 10 13l6.8-3.4M3.2 12.6 10 16l6.8-3.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-    </svg>
+    <input
+      ref={inputRef}
+      aria-label="Task name"
+      maxLength={500}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onPointerDown={stopCardInteract}
+      onClick={stopCardInteract}
+      onBlur={() => {
+        const next = draft.trim();
+        if (next) onRename(next);
+        else onCancel();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+        if (event.key === "Escape") onCancel();
+      }}
+      className="w-full border-0 bg-transparent p-0 text-sm font-medium leading-5 text-ink shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
+    />
   );
 }
 
-function GroupIcon({ name }: { name: BoardGroupBy }) {
-  const path = {
-    status: "M10 4.2a5.8 5.8 0 1 0 0 11.6 5.8 5.8 0 0 0 0-11.6zM10 8.3a1.7 1.7 0 1 0 .01 0z",
-    assignee: "M10 9.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4zM5.2 15.2c.7-2 2.4-3 4.8-3s4.1 1 4.8 3",
-    priority: "M5 3.5h1.1v13H5v-13zm1.1 1.1h7.6L12 7.2l1.7 2.6H6.1V4.6z",
-    tags: "M4 8.2 9.2 3.5h6.3v6.3L9.8 15.5 4 8.2zm8.6-2.2h.1",
-    due: "M4 5.5h12v9H4v-9zm0 3h12M7 4v2.5M13 4v2.5",
-    type: "M10 3.4 16 6.7v6.6L10 16.6 4 13.3V6.7L10 3.4zM10 10.1 16 6.7M10 10.1 4 6.7M10 10.1v6.5",
-  }[name];
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted">
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+function CardSubtaskComposer({ parent, onDone }: { parent: Task; onDone: () => void }) {
+  const createTask = useFlowboard((state) => state.createTask);
+  const users = useFlowboard((state) => state.users);
+  const currentUserId = useFlowboard((state) => state.currentUserId);
+  const [title, setTitle] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [priority, setPriority] = useState<Priority>("none");
+  const assignees = users.filter((user) => assigneeIds.includes(user.id));
 
-function TrashIcon() {
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const result = createTask({
+      title,
+      primaryListId: parent.primaryListId,
+      parentTaskId: parent.id,
+      statusId: parent.statusId,
+      assigneeIds,
+      dueDate,
+      priority,
+    });
+    if (!isError(result)) onDone();
+  }
+
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-      <path d="M5 6.5h10M8 6.4V5h4v1.4M7.2 6.5l.5 8h4.6l.5-8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <form
+      onSubmit={submit}
+      onPointerDown={stopCardInteract}
+      onClick={stopCardInteract}
+      className="rounded-[10px] bg-surface-raised p-3 shadow-[0_1px_2px_rgb(var(--shadow)/0.06)] ring-1 ring-line"
+    >
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          aria-label="Subtask name"
+          placeholder="Subtask Name..."
+          maxLength={500}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onDone();
+          }}
+          className="min-w-0 flex-1 bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none"
+        />
+        <button
+          type="button"
+          className={`shrink-0 px-1.5 py-1 text-sm text-ink-muted hover:text-ink ${focusRing}`}
+          onClick={onDone}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!title.trim()}
+          className={`shrink-0 rounded-full bg-surface-sunken px-3 py-1 text-sm font-medium text-ink-muted hover:bg-line disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
+        >
+          Save
+        </button>
+      </div>
+      <div className="mt-2 flex flex-col">
+        <AssigneePicker users={users} assigneeIds={assigneeIds} currentUserId={currentUserId} onChange={setAssigneeIds}>
+          <ComposerPersonIcon />
+          {assignees.length > 0 ? <AvatarStack users={assignees} /> : <span className="text-ink-faint">Assignee</span>}
+        </AssigneePicker>
+        <DueDatePicker value={dueDate} onChange={setDueDate}>
+          <ComposerCalendarIcon />
+          <span className={dueDate ? "text-ink" : "text-ink-faint"}>{dueDate ? formatDue(dueDate) : "Add date"}</span>
+        </DueDatePicker>
+        <PriorityPicker value={priority} onChange={setPriority}>
+          <PriorityFlag priority={priority} decorative />
+          <span className={priority === "none" ? "text-ink-faint" : "text-ink"}>
+            {priority === "none" ? "Add priority" : priorityLabel[priority]}
+          </span>
+        </PriorityPicker>
+      </div>
+    </form>
   );
 }
 
@@ -489,15 +559,23 @@ function SortableCard({
   disabled: boolean;
   onOpen: (taskId: string) => void;
 }) {
+  const allTasks = useFlowboard((state) => state.tasks);
+  const currentUserId = useFlowboard((state) => state.currentUserId);
+  const updateTask = useFlowboard((state) => state.updateTask);
+  const children = subtasksOf(allTasks, task.id);
+  const [expanded, setExpanded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
-    disabled,
+    disabled: disabled || adding || renaming,
   });
   // dnd-kit needs this transform. See README "Drag-and-drop styles".
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const showTree = expanded || adding;
   return (
     <div
       ref={setNodeRef}
@@ -505,10 +583,211 @@ function SortableCard({
       className={`cursor-grab text-left active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
       {...attributes}
       {...listeners}
-      onClick={() => onOpen(task.id)}
     >
-      <TaskCardFace task={task} users={users} statuses={statuses} />
+      <article className="group/card relative rounded-[10px] bg-surface-raised p-3.5 shadow-[0_1px_2px_rgb(var(--shadow)/0.06)]">
+        {renaming ? null : (
+          <CardToolbar
+            pinned={adding}
+            onAddSubtask={() => {
+              setAdding(true);
+              setExpanded(true);
+            }}
+            onRename={() => setRenaming(true)}
+          />
+        )}
+        <CardTitle
+          title={task.title}
+          renaming={renaming}
+          onOpen={() => onOpen(task.id)}
+          onRename={(title) => {
+            if (title !== task.title) updateTask(task.id, { title });
+            setRenaming(false);
+          }}
+          onCancelRename={() => setRenaming(false)}
+        />
+        <CardMeta
+          task={task}
+          users={users}
+          currentUserId={currentUserId}
+          status={statuses.find((item) => item.id === task.statusId)}
+          onAssignees={(assigneeIds) => updateTask(task.id, { assigneeIds })}
+          onDue={(dueDate) => updateTask(task.id, { dueDate })}
+          onPriority={(priority) => updateTask(task.id, { priority })}
+        />
+        {children.length > 0 ? (
+          <SubtaskToggle count={children.length} expanded={expanded} onToggle={() => setExpanded((open) => !open)} />
+        ) : null}
+      </article>
+      {showTree ? (
+        <ul className="relative mt-1.5 flex flex-col gap-1.5 pl-4" aria-label={subtaskLabel(children.length)}>
+          <span className="absolute bottom-3 left-1.5 top-0 w-px bg-line" aria-hidden="true" />
+          {children.map((child) => (
+            <li key={child.id} className="relative">
+              <span className="absolute -left-2.5 top-4 h-px w-2.5 bg-line" aria-hidden="true" />
+              <SubtaskCard
+                task={child}
+                users={users}
+                currentUserId={currentUserId}
+                status={statuses.find((item) => item.id === child.statusId)}
+                onOpen={onOpen}
+                onAssignees={(assigneeIds) => updateTask(child.id, { assigneeIds })}
+                onDue={(dueDate) => updateTask(child.id, { dueDate })}
+                onPriority={(priority) => updateTask(child.id, { priority })}
+              />
+            </li>
+          ))}
+          {adding ? (
+            <li className="relative">
+              <span className="absolute -left-2.5 top-4 h-px w-2.5 bg-line" aria-hidden="true" />
+              <CardSubtaskComposer parent={task} onDone={() => setAdding(false)} />
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
     </div>
+  );
+}
+
+function SubtaskCard({
+  task,
+  users,
+  currentUserId,
+  status,
+  onOpen,
+  onAssignees,
+  onDue,
+  onPriority,
+}: {
+  task: Task;
+  users: User[];
+  currentUserId: string;
+  status?: Status;
+  onOpen: (taskId: string) => void;
+  onAssignees: (assigneeIds: string[]) => void;
+  onDue: (dueDate: string | null) => void;
+  onPriority: (priority: Priority) => void;
+}) {
+  const updateTask = useFlowboard((state) => state.updateTask);
+  const [renaming, setRenaming] = useState(false);
+  return (
+    <article className="group/card relative rounded-[10px] bg-surface-raised p-3 shadow-[0_1px_2px_rgb(var(--shadow)/0.06)]">
+      {renaming ? null : <CardToolbar pinned={false} onRename={() => setRenaming(true)} />}
+      <CardTitle
+        title={task.title}
+        renaming={renaming}
+        onOpen={() => onOpen(task.id)}
+        onRename={(title) => {
+          if (title !== task.title) updateTask(task.id, { title });
+          setRenaming(false);
+        }}
+        onCancelRename={() => setRenaming(false)}
+      />
+      <CardMeta task={task} users={users} currentUserId={currentUserId} status={status} onAssignees={onAssignees} onDue={onDue} onPriority={onPriority} />
+    </article>
+  );
+}
+
+function subtaskLabel(count: number): string {
+  return count === 1 ? "1 subtask" : `${count} subtasks`;
+}
+
+function SubtaskToggle({ count, expanded, onToggle }: { count: number; expanded: boolean; onToggle: () => void }) {
+  const label = subtaskLabel(count);
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-label={expanded ? `Hide ${label}` : `Show ${label}`}
+      className={`mt-2.5 inline-flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink ${focusRing}`}
+      onPointerDown={stopCardInteract}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+    >
+      {expanded ? <ChevronDownIcon /> : <TreeBranchIcon />}
+      {label}
+    </button>
+  );
+}
+
+function CardMeta({
+  task,
+  users,
+  currentUserId,
+  status,
+  onAssignees,
+  onDue,
+  onPriority,
+}: {
+  task: Task;
+  users: User[];
+  currentUserId: string;
+  status?: Status;
+  onAssignees: (assigneeIds: string[]) => void;
+  onDue: (dueDate: string | null) => void;
+  onPriority: (priority: Priority) => void;
+}) {
+  const overdue = isOverdue(task.dueDate, status?.category ?? null);
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-1.5" onPointerDown={stopCardInteract} onClick={stopCardInteract}>
+      <AssigneePicker users={users} assigneeIds={task.assigneeIds} currentUserId={currentUserId} onChange={onAssignees} />
+      <DueDatePicker chip value={task.dueDate} overdue={overdue} onChange={onDue} />
+      <PriorityPicker chip value={task.priority} onChange={onPriority} />
+    </div>
+  );
+}
+
+function TreeBranchIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-3.5 w-3.5">
+      <circle cx="6" cy="5" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="6" cy="15" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M6 6.6v6.8M6 10h5.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="13.4" cy="10" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-3.5 w-3.5">
+      <path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+      <path d="M10 4.5v11M4.5 10h11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-3.5 w-3.5">
+      <path d="M12.6 4.4 15.6 7.4 7.2 15.8H4.2v-3zM11.2 5.8 14.2 8.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ComposerPersonIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted">
+      <circle cx="10" cy="7" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M5.5 15.5c.6-2.2 2.3-3.3 4.5-3.3s3.9 1.1 4.5 3.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ComposerCalendarIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted">
+      <rect x="3" y="4.5" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M3 8h14M7 3.5v3M13 3.5v3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -517,7 +796,7 @@ function TaskCardFace({ task, users, statuses }: { task: Task; users: User[]; st
   const overdue = isOverdue(task.dueDate, status?.category ?? null);
   const assignees = users.filter((user) => task.assigneeIds.includes(user.id));
   return (
-    <article className="rounded-card bg-surface-raised p-3 shadow-card ring-1 ring-line hover:ring-accent">
+    <article className="rounded-[10px] bg-surface-raised p-3.5 shadow-[0_1px_2px_rgb(var(--shadow)/0.06)]">
       <h3 className="text-sm font-medium leading-5 text-ink">{task.title}</h3>
       <div className="mt-3 flex items-center justify-between gap-2">
         <AvatarStack users={assignees} />

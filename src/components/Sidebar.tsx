@@ -20,7 +20,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -29,22 +28,15 @@ import { childContainers } from "../store/selectors";
 import { useFlowboard } from "../store/store";
 import { sidebarContainers } from "../store/permissions";
 import { isDesktopLayout } from "../lib/layout";
-import { focusRing, ghostButton } from "./classes";
+import { focusRing } from "./classes";
+import { CreateContainerDialog } from "./CreateContainerDialog";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
-import { TaskFormDialog } from "./TaskFormDialog";
 import { TreeSkeleton } from "./feedback";
 
 const indent = ["pl-1", "pl-4", "pl-7", "pl-10"];
 const sidebarMin = 200;
 const sidebarMax = 480;
 const sidebarDefault = 288;
-
-type ChildType = "folder" | "list";
-
-interface Composer {
-  parentId: string;
-  type: ChildType;
-}
 
 function clampSidebar(width: number): number {
   return Math.min(sidebarMax, Math.max(sidebarMin, width));
@@ -58,7 +50,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const selectedListId = useFlowboard((state) => state.selectedListId);
   const booting = useFlowboard((state) => state.booting);
   const selectList = useFlowboard((state) => state.selectList);
-  const createContainer = useFlowboard((state) => state.createContainer);
+  const requestComposeTask = useFlowboard((state) => state.requestComposeTask);
   const renameContainer = useFlowboard((state) => state.renameContainer);
   const archiveContainer = useFlowboard((state) => state.archiveContainer);
   const unarchiveContainer = useFlowboard((state) => state.unarchiveContainer);
@@ -71,11 +63,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const closeTimer = useRef<number | null>(null);
   const closeShortcut = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘\\" : "Ctrl \\";
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [composer, setComposer] = useState<Composer | null>(null);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ id: string; kind: "archive" | "delete" } | null>(null);
   const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
-  const [taskDialogListId, setTaskDialogListId] = useState<string | null>(null);
+  const [createDialog, setCreateDialog] = useState<{ type: "list" | "folder"; parentId: string } | null>(null);
   const [showArchived, setShowArchived] = useState(true);
   const [hiddenArchived, setHiddenArchived] = useState<Record<string, boolean>>({});
 
@@ -203,7 +194,6 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                 isAdmin={isAdmin}
                 collapsed={collapsed}
                 selectedListId={selectedListId}
-                composer={composer}
                 renameId={renameId}
                 confirmAction={confirmAction}
                 showArchived={showArchived}
@@ -217,16 +207,18 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                   selectList(id);
                   if (!isDesktopLayout()) onClose();
                 }}
-                onStartCreate={(parentId, type) => setComposer({ parentId, type })}
-                onCancelCreate={() => setComposer(null)}
-                onCreate={(parentId, type, name) => {
-                  const result = createContainer({ name, type, parentId });
-                  if (!("error" in result)) setComposer(null);
+                onCreateList={(parentId) => {
+                  setCollapsed((current) => ({ ...current, [parentId]: false }));
+                  setCreateDialog({ type: "list", parentId });
+                }}
+                onCreateFolder={(parentId) => {
+                  setCollapsed((current) => ({ ...current, [parentId]: false }));
+                  setCreateDialog({ type: "folder", parentId });
                 }}
                 onCreateSpace={() => setSpaceDialogOpen(true)}
                 onCreateTask={(listId) => {
-                  const result = selectList(listId);
-                  if (!("error" in result)) setTaskDialogListId(listId);
+                  requestComposeTask(listId);
+                  if (!isDesktopLayout()) onClose();
                 }}
                 onStartRename={setRenameId}
                 onRename={(id, name) => {
@@ -252,8 +244,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
         )}
         {spaceDialogOpen ? <CreateSpaceDialog onClose={() => setSpaceDialogOpen(false)} /> : null}
-        {taskDialogListId ? (
-          <TaskFormDialog listId={taskDialogListId} onClose={() => setTaskDialogListId(null)} />
+        {createDialog ? (
+          <CreateContainerDialog
+            type={createDialog.type}
+            defaultParentId={createDialog.parentId}
+            onClose={() => setCreateDialog(null)}
+          />
         ) : null}
       </div>
       {open ? (
@@ -312,7 +308,6 @@ interface TreeProps {
   isAdmin: boolean;
   collapsed: Record<string, boolean>;
   selectedListId: string | null;
-  composer: Composer | null;
   renameId: string | null;
   confirmAction: { id: string; kind: "archive" | "delete" } | null;
   showArchived: boolean;
@@ -320,9 +315,8 @@ interface TreeProps {
   onToggleShowArchived: () => void;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
-  onStartCreate: (parentId: string, type: ChildType) => void;
-  onCancelCreate: () => void;
-  onCreate: (parentId: string, type: ChildType, name: string) => void;
+  onCreateList: (parentId: string) => void;
+  onCreateFolder: (parentId: string) => void;
   onCreateSpace: () => void;
   onCreateTask: (listId: string) => void;
   onStartRename: (id: string) => void;
@@ -407,7 +401,6 @@ function TreeNode({ container, depth, ...props }: TreeProps & { container: Conta
     props.isAdmin && container.type !== "workspace" && props.confirmAction?.id === container.id
       ? props.confirmAction.kind
       : null;
-  const composer = props.composer?.parentId === container.id ? props.composer : null;
   const createItems = archived ? [] : createOptions(container, props.isAdmin, props);
 
   return (
@@ -452,6 +445,11 @@ function TreeNode({ container, depth, ...props }: TreeProps & { container: Conta
             {...(props.isAdmin && container.type !== "workspace" && !archived ? { ...attributes, ...listeners } : {})}
           >
             <NodeIcon type={container.type} id={container.id} />
+            {archived ? (
+              <span title="Archived" className="shrink-0 text-ink-faint">
+                <ArchiveBoxIcon />
+              </span>
+            ) : null}
             <span className="truncate">{container.name}</span>
           </button>
         )}
@@ -496,14 +494,6 @@ function TreeNode({ container, depth, ...props }: TreeProps & { container: Conta
             </button>
             <button
               type="button"
-              aria-label={`Delete ${container.name}`}
-              className={`rounded-control p-1 text-ink-faint hover:bg-danger-soft hover:text-danger ${focusRing}`}
-              onClick={() => props.onAskDelete(container.id)}
-            >
-              <TrashIcon />
-            </button>
-            <button
-              type="button"
               aria-label={`Hide archived ${container.name}`}
               className={`rounded-control p-1 text-ink-faint hover:bg-surface-raised hover:text-ink ${focusRing}`}
               onClick={() => props.onHideArchived(container.id)}
@@ -525,13 +515,6 @@ function TreeNode({ container, depth, ...props }: TreeProps & { container: Conta
           </span>
         )}
       </div>
-      {composer && !archived ? (
-        <CreateField
-          label={composer.type}
-          onCancel={props.onCancelCreate}
-          onCreate={(name) => props.onCreate(container.id, composer.type, name)}
-        />
-      ) : null}
       {!archived && !isCollapsed && container.type !== "list" ? <Tree {...props} parentId={container.id} depth={depth + 1} /> : null}
     </li>
   );
@@ -548,14 +531,14 @@ interface CreateItem {
 function createOptions(
   container: Container,
   isAdmin: boolean,
-  props: Pick<TreeProps, "onStartCreate" | "onCreateTask">,
+  props: Pick<TreeProps, "onCreateList" | "onCreateFolder" | "onCreateTask">,
 ): CreateItem[] {
   const listItem = (parentId: string): CreateItem => ({
     key: "list",
     label: "List",
     hint: "Track tasks, projects, people & more",
     icon: <ListIcon />,
-    run: () => props.onStartCreate(parentId, "list"),
+    run: () => props.onCreateList(parentId),
   });
 
   if (container.type === "list") {
@@ -582,7 +565,7 @@ function createOptions(
       label: "Folder",
       hint: "Group Lists, Docs & more",
       icon: <FolderOutlineIcon />,
-      run: () => props.onStartCreate(container.id, "folder"),
+      run: () => props.onCreateFolder(container.id),
     });
   }
   return items;
@@ -823,40 +806,6 @@ function RenameField({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     />
-  );
-}
-
-function CreateField({
-  label,
-  onCreate,
-  onCancel,
-}: {
-  label: string;
-  onCreate: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState("");
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (name.trim()) onCreate(name);
-  }
-  return (
-    <form className="mb-1 ml-6 flex gap-1" onSubmit={submit}>
-      <input
-        autoFocus
-        className="min-w-0 flex-1 rounded-control border border-line px-2 py-1 text-sm"
-        placeholder={`New ${label}`}
-        aria-label={`New ${label} name`}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") onCancel();
-        }}
-      />
-      <button type="submit" className={ghostButton}>
-        Add
-      </button>
-    </form>
   );
 }
 

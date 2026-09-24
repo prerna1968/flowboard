@@ -1,5 +1,5 @@
 import type { Priority, User } from "../types";
-import { priorityBadgeClass, priorityLabel } from "../lib/format";
+import { priorityBadgeClass, priorityLabel, statusChipClass } from "../lib/format";
 
 export function Avatar({ user, size = "sm" }: { user: User; size?: "sm" | "md" }) {
   const dim = size === "sm" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
@@ -48,8 +48,11 @@ export function PriorityFlag({ priority, decorative = false }: { priority: Prior
   );
 }
 
-export function StatusMark({ color }: { color: string }) {
+export function StatusMark({ color, onChip = false }: { color: string; onChip?: boolean }) {
   if (color === "done") {
+    if (onChip) {
+      return <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-[10px] font-bold text-white">✓</span>;
+    }
     return (
       <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-status-done text-[9px] font-bold text-white">
         ✓
@@ -57,7 +60,29 @@ export function StatusMark({ color }: { color: string }) {
     );
   }
   if (color === "in_progress") {
-    return <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-accent bg-accent-soft" />;
+    return (
+      <span
+        className={`inline-block h-3.5 w-3.5 rounded-full border-2 ${
+          onChip ? "border-white" : "border-accent bg-accent-soft"
+        }`}
+      />
+    );
   }
-  return <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-status-todo" />;
+  return (
+    <span
+      className={`inline-block h-3.5 w-3.5 rounded-full border-2 ${
+        onChip ? "border-dashed border-status-todo" : "border-status-todo"
+      }`}
+    />
+  );
+}
+
+export function StatusChip({ color, label }: { color: string; label: string }) {
+  const chip = statusChipClass[color] ?? statusChipClass.todo;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${chip}`}>
+      <StatusMark color={color} onChip />
+      {label}
+    </span>
+  );
 }

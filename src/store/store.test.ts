@@ -282,6 +282,18 @@ describe("task access", () => {
     expect(store.getState().tasks.some((task) => task.id === "task-tokens")).toBe(true);
   });
 
+  it("opens compose on a list so a new task lands in To do", () => {
+    const store = createFlowboardStore({ persist: false, delayMs: 0 });
+    const compose = store.getState().requestComposeTask(ids.sprint);
+    expect(isError(compose)).toBe(false);
+    expect(store.getState().selectedListId).toBe(ids.sprint);
+    expect(store.getState().composeTaskListId).toBe(ids.sprint);
+    const created = store.getState().createTask({ title: "From the sidebar", primaryListId: ids.sprint });
+    expect(isError(created)).toBe(false);
+    if (isError(created)) return;
+    expect(created.data.statusId).toBe(`${ids.sprint}-todo`);
+  });
+
   it("rejects a subtask of a subtask", () => {
     const store = createFlowboardStore({ persist: false, delayMs: 0 });
     const result = store.getState().createTask({
