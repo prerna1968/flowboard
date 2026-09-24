@@ -1,0 +1,189 @@
+import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
+
+function rgb(token: string): string {
+  return `rgb(${token} / <alpha-value>)`;
+}
+
+export default {
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        ink: {
+          DEFAULT: rgb("var(--ink)"),
+          muted: rgb("var(--ink-muted)"),
+          faint: rgb("var(--ink-faint)"),
+        },
+        surface: {
+          DEFAULT: rgb("var(--surface)"),
+          raised: rgb("var(--surface-raised)"),
+          sunken: rgb("var(--surface-sunken)"),
+        },
+        line: rgb("var(--line)"),
+        accent: {
+          DEFAULT: rgb("var(--accent)"),
+          hover: rgb("var(--accent-hover)"),
+          soft: rgb("var(--accent-soft)"),
+        },
+        on: rgb("var(--on)"),
+        danger: {
+          DEFAULT: rgb("var(--danger)"),
+          soft: rgb("var(--danger-soft)"),
+        },
+        priority: {
+          urgent: rgb("var(--priority-urgent)"),
+          urgentSoft: rgb("var(--priority-urgent-soft)"),
+          high: rgb("var(--priority-high)"),
+          highSoft: rgb("var(--priority-high-soft)"),
+          normal: rgb("var(--priority-normal)"),
+          normalSoft: rgb("var(--priority-normal-soft)"),
+          low: rgb("var(--priority-low)"),
+          lowSoft: rgb("var(--priority-low-soft)"),
+          none: rgb("var(--priority-none)"),
+          noneSoft: rgb("var(--priority-none-soft)"),
+        },
+        status: {
+          todo: rgb("var(--status-todo)"),
+          progress: rgb("var(--status-progress)"),
+          done: rgb("var(--status-done)"),
+          doneSoft: rgb("var(--status-done-soft)"),
+        },
+      },
+      fontFamily: {
+        sans: ["IBM Plex Sans", "Segoe UI", "sans-serif"],
+      },
+      borderRadius: {
+        card: "12px",
+        control: "8px",
+      },
+      boxShadow: {
+        card: "0 1px 2px rgb(var(--shadow) / 0.06), 0 8px 24px rgb(var(--shadow) / 0.06)",
+        pop: "0 12px 40px rgb(var(--shadow) / 0.16)",
+      },
+    },
+  },
+  plugins: [
+    plugin(({ addBase }) => {
+      addBase({
+        ":root": {
+          "--ink": "27 36 48",
+          "--ink-muted": "93 107 124",
+          "--ink-faint": "139 152 168",
+          "--surface": "247 248 250",
+          "--surface-raised": "255 255 255",
+          "--surface-sunken": "240 241 243",
+          "--line": "230 232 236",
+          "--on": "255 255 255",
+          "--danger": "180 35 24",
+          "--danger-soft": "255 236 238",
+          "--priority-urgent": "225 29 46",
+          "--priority-urgent-soft": "255 236 238",
+          "--priority-high": "232 163 23",
+          "--priority-high-soft": "255 246 224",
+          "--priority-normal": "47 107 255",
+          "--priority-normal-soft": "234 240 255",
+          "--priority-low": "139 149 161",
+          "--priority-low-soft": "242 244 246",
+          "--priority-none": "139 149 161",
+          "--priority-none-soft": "238 242 245",
+          "--status-todo": "135 144 158",
+          "--status-progress": "123 104 238",
+          "--status-done": "0 136 68",
+          "--status-done-soft": "236 253 245",
+          "--shadow": "27 36 48",
+          "--accent": "123 104 238",
+          "--accent-hover": "95 72 217",
+          "--accent-soft-light": "241 237 255",
+          "--accent-soft-dark": "49 42 86",
+          "--accent-soft": "var(--accent-soft-light)",
+          "--tw-ring-offset-color": "rgb(var(--surface-raised))",
+        },
+        "[data-appearance=dark]": {
+          "--ink": "232 234 237",
+          "--ink-muted": "154 163 173",
+          "--ink-faint": "107 115 128",
+          "--surface": "22 24 29",
+          "--surface-raised": "32 35 42",
+          "--surface-sunken": "18 20 24",
+          "--line": "52 57 66",
+          "--danger": "248 113 113",
+          "--danger-soft": "64 28 28",
+          "--priority-urgent-soft": "64 24 28",
+          "--priority-high-soft": "64 48 16",
+          "--priority-normal-soft": "24 34 64",
+          "--priority-low-soft": "40 44 50",
+          "--priority-none-soft": "36 40 46",
+          "--status-done-soft": "16 48 32",
+          "--shadow": "0 0 0",
+          "--accent-soft": "var(--accent-soft-dark)",
+        },
+        "[data-accent=black]": {
+          "--accent": "27 36 48",
+          "--accent-hover": "15 20 28",
+          "--accent-soft-light": "232 235 239",
+          "--accent-soft-dark": "48 56 68",
+        },
+        "[data-accent=purple]": {
+          "--accent": "123 104 238",
+          "--accent-hover": "95 72 217",
+          "--accent-soft-light": "241 237 255",
+          "--accent-soft-dark": "49 42 86",
+        },
+        "[data-accent=blue]": {
+          "--accent": "47 107 255",
+          "--accent-hover": "30 80 214",
+          "--accent-soft-light": "234 240 255",
+          "--accent-soft-dark": "24 38 78",
+        },
+        "[data-accent=pink]": {
+          "--accent": "232 93 142",
+          "--accent-hover": "199 64 114",
+          "--accent-soft-light": "255 236 244",
+          "--accent-soft-dark": "78 32 52",
+        },
+        "[data-accent=violet]": {
+          "--accent": "139 92 246",
+          "--accent-hover": "109 66 214",
+          "--accent-soft-light": "243 237 255",
+          "--accent-soft-dark": "48 34 84",
+        },
+        "[data-accent=indigo]": {
+          "--accent": "99 102 241",
+          "--accent-hover": "72 76 214",
+          "--accent-soft-light": "238 239 255",
+          "--accent-soft-dark": "36 38 78",
+        },
+        "[data-accent=orange]": {
+          "--accent": "234 126 43",
+          "--accent-hover": "196 98 24",
+          "--accent-soft-light": "255 241 230",
+          "--accent-soft-dark": "72 42 18",
+        },
+        "[data-accent=teal]": {
+          "--accent": "20 184 166",
+          "--accent-hover": "13 148 136",
+          "--accent-soft-light": "230 252 248",
+          "--accent-soft-dark": "16 52 48",
+        },
+        "[data-accent=bronze]": {
+          "--accent": "180 130 90",
+          "--accent-hover": "148 102 68",
+          "--accent-soft-light": "247 238 228",
+          "--accent-soft-dark": "58 42 28",
+        },
+        "[data-accent=mint]": {
+          "--accent": "52 168 132",
+          "--accent-hover": "36 134 104",
+          "--accent-soft-light": "230 248 240",
+          "--accent-soft-dark": "20 52 42",
+        },
+        "[data-accent=black][data-appearance=dark]": {
+          "--accent": "232 234 237",
+          "--accent-hover": "255 255 255",
+          "--on": "27 36 48",
+        },
+      });
+    }),
+  ],
+} satisfies Config;
