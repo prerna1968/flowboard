@@ -58,6 +58,15 @@ export function TopBar({
               ))}
         </p>
         {user ? (
+          <button
+            type="button"
+            className={ghostButton}
+            onClick={() => setSwitchOpen(true)}
+          >
+            Switch user
+          </button>
+        ) : null}
+        {user ? (
           <Menu>
             <MenuButton
               className={`flex shrink-0 items-center gap-2 rounded-full border border-line py-1 pl-1 pr-1 sm:pr-3 ${focusRing}`}

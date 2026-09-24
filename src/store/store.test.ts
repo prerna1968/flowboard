@@ -115,6 +115,13 @@ describe("task access", () => {
     expect(isError(result) && result.error.code).toBe("FORBIDDEN");
   });
 
+  it("lets an admin rename the workspace", () => {
+    const store = createFlowboardStore({ persist: false, delayMs: 0 });
+    const result = store.getState().renameContainer(ids.workspace, "Studio");
+    expect(isError(result)).toBe(false);
+    expect(store.getState().containers.find((container) => container.id === ids.workspace)?.name).toBe("Studio");
+  });
+
   it("hides archived containers from work views until they are restored", () => {
     const store = createFlowboardStore({ persist: false, delayMs: 0 });
     store.getState().archiveContainer(ids.q2);

@@ -71,6 +71,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const [hiddenArchived, setHiddenArchived] = useState<Record<string, boolean>>({});
 
   const user = users.find((item) => item.id === currentUserId);
+  const workspace = containers.find((container) => container.type === "workspace");
   const visible = useMemo(
     () => (user ? sidebarContainers(containers, user, grants) : []),
     [containers, grants, user],
@@ -176,8 +177,28 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <div className="flex h-full w-full flex-col">
         <div className="flex items-center gap-2 border-b border-line px-3 py-3">
           <span className="flex h-7 w-7 items-center justify-center rounded-control bg-accent text-xs font-bold text-on">F</span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink">Flowboard</p>
+          <div className="min-w-0 flex-1">
+            {workspace && isAdmin && renameId === workspace.id ? (
+              <RenameField
+                initial={workspace.name}
+                onCancel={() => setRenameId(null)}
+                onSave={(name) => {
+                  const result = renameContainer(workspace.id, name);
+                  if (!("error" in result)) setRenameId(null);
+                }}
+              />
+            ) : workspace && isAdmin ? (
+              <button
+                type="button"
+                className={`block w-full truncate text-left text-sm font-semibold text-ink ${focusRing}`}
+                aria-label={`Rename workspace ${workspace.name}`}
+                onClick={() => setRenameId(workspace.id)}
+              >
+                {workspace.name}
+              </button>
+            ) : (
+              <p className="truncate text-sm font-semibold text-ink">{workspace?.name ?? "Flowboard"}</p>
+            )}
             <p className="text-[11px] text-ink-faint">Workspace</p>
           </div>
         </div>

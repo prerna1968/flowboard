@@ -35,6 +35,10 @@ import { SelectMenu } from "./SelectMenu";
 
 const listGrid = "grid w-full min-w-[640px] grid-cols-[minmax(0,1fr)_72px_88px_96px_120px]";
 
+function clickedRowChrome(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest("button, input, textarea, [role='listbox'], [role='combobox'], [role='menu']"));
+}
+
 export function ListView({ listId }: { listId: string }) {
   const tasks = useFlowboard((state) => state.tasks);
   const statuses = useFlowboard((state) => state.statuses);
@@ -264,6 +268,11 @@ export function ListView({ listId }: { listId: string }) {
             onPriority={applyBulkPriority}
             onClear={() => setSelectedIds([])}
           />
+        ) : null}
+        {!searching && visible.length === 0 ? (
+          <div className="px-4 py-4">
+            <EmptyState title="This list is empty" body="Add a task below. New tasks land in To do." />
+          </div>
         ) : null}
         {groups.map((group) => {
           const isCollapsed = collapsed[group.id] ?? false;
@@ -670,7 +679,13 @@ function TaskRows({
 
   const checked = selectedIds.includes(task.id);
   const row = (
-    <div className={`group items-center border-t border-line px-4 py-1.5 hover:bg-surface ${checked ? "bg-accent-soft" : ""} ${listGrid}`}>
+    <div
+      className={`group cursor-pointer items-center border-t border-line px-4 py-1.5 hover:bg-surface ${checked ? "bg-accent-soft" : ""} ${listGrid}`}
+      onClick={(event) => {
+        if (renaming || clickedRowChrome(event.target)) return;
+        onOpen(task.id);
+      }}
+    >
       <div className={`flex min-w-0 items-center gap-1.5 ${depth ? "pl-7" : ""}`}>
         {isParent ? (
           <button

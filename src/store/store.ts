@@ -416,7 +416,6 @@ export function createFlowboardStore(options: StoreOptions = {}): StoreApi<Flowb
         if (isError(trimmed)) return reject(trimmed);
         const container = state.containers.find((item) => item.id === id && !item.archivedAt);
         if (!container) return reject(fail("NOT_FOUND", "Container not found."));
-        if (container.type === "workspace") return reject(fail("VALIDATION", "The workspace name is fixed in this demo."));
         const next = { ...container, name: trimmed.data };
         set({ containers: state.containers.map((item) => (item.id === id ? next : item)) });
         return ok(next);

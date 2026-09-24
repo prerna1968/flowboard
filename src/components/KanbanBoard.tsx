@@ -28,6 +28,7 @@ import { boardColumns, type BoardColumnModel, type BoardDirection, type BoardGro
 import { focusRing } from "./classes";
 import { GroupByMenu } from "./GroupByMenu";
 import { AssigneePicker, DueDatePicker, PriorityPicker } from "./pickers";
+import { EmptyState } from "./feedback";
 import { TaskComposer } from "./TaskComposer";
 import { Avatar, AvatarStack, PriorityFlag, StatusChip, StatusMark } from "./TaskMeta";
 
@@ -157,11 +158,7 @@ export function KanbanBoard({ listId }: { listId: string }) {
   }
 
   if (searching && visible.length === 0) {
-    return (
-      <p className="rounded-card border border-dashed border-line bg-surface-raised px-4 py-10 text-center text-sm text-ink-muted">
-        No tasks match “{search.trim()}”.
-      </p>
-    );
+    return <EmptyState title="No matching tasks" body={`Nothing in this list matches “${search.trim()}”.`} />;
   }
 
   return (
@@ -193,6 +190,11 @@ export function KanbanBoard({ listId }: { listId: string }) {
           setSubgroupDirection("asc");
         }}
       />
+      {!searching && visible.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState title="This list is empty" body="Add a task in To do, or use + on a list in the sidebar." />
+        </div>
+      ) : null}
       <div className="mt-4 flex items-start gap-4 overflow-x-auto pb-4">
         {columns.map((column) => (
           <Column
